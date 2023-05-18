@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+     <meta charset="UTF-8">
+     <meta http-equiv="X-UA-Compatible" content="IE=edge">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+     <script src="/js/bootstrap.bundle.min.js"></script>
+     <link rel="stylesheet" href="/css/bootstrap.min.css" />
+
+     <title>WOL Panel</title>
+</head>
+<body>
+     <style>
+          .spinner-grow-xs {
+               --bs-spinner-width: .75em;
+               --bs-spinner-height: .75em;
+          }
+     </style>
+     
+     <div class="container my-4">
+          <div class="row js-card-container">
+
+          </div>
+     </div>
+
+     <script>
+          const socket = new WebSocket("ws://" + window.location.host)
+          socket.addEventListener("message", socketMessageHandler)
+
+          let mainLoopInterval = null
+          socket.addEventListener("open", () => {
+               requestHostStates()
+               startMainLoop()
+          })
+
+
+
+          window.addEventListener("blur", () => stopMainLoop())
+          window.addEventListener("focus", () => {
+               requestHostStates()
+               startMainLoop()
+          })
+
+          function socketMessageHandler(event) {
+               const RESPONSE = JSON.parse(String(event.data))
+               const COMMAND = RESPONSE.shift()
+
+
+               switch (COMMAND) {
+                    case "GETHOSTSTATES":
+                         renderHosts(RESPONSE[0])
+                         break;
+               
+                    default:
+                         break;
+               }
+
+               
+          }
+
+          function requestHostStates() {
+               if (socket.readyState !== socket.OPEN) {
+                    console.error("socket not open")
+                    return
+               }
+
+               socket.send(JSON.stringify(["GETHOSTSTATES"]))
+          }
+          
+          function startMainLoop() {
+               stopMainLoop()
+               mainLoopInterval = setInterval(requestHostStates, 7500)
+          }
+
+          function stopMainLoop() {
+               if (mainLoopInterval !== null) clearInterval(mainLoopInterval)
+               mainLoopInterval = null
+          }
+     
+          function renderHosts(allHosts) {
+               let cardContainer = document.querySelector(".js-card-container")
+               cardContainer.innerHTML = ""
+               for (const hostEntry of allHosts) {
+                    let card = createComputerCard(hostEntry)
+                    let col = htmlToElement(`<div class="col-md-4 col-sm-6"></div>`)
+                    col.appendChild(card)
+                    cardContainer.appendChild(col)
+               }
+          }
+
+
+          function createComputerCard(hostEntry) {
+               let cardClass, textTheme, isOnline = false
+               if (hostEntry.hasOwnProperty("isAlive")) {
+                    cardClass = hostEntry.isAlive ? "text-bg-success" : "text-bg-danger"
+                    textTheme = "light"
+                    isOnline = hostEntry.isAlive
+               } else {
+                    cardClass = "text-bg-secondary"
+                    textTheme = "light"
+               }
+
+               let ipText = hostEntry.hasOwnProperty("IP") ? `<p class="card-text">IP-Adresse: <code class="text-${textTheme}"><strong>${hostEntry.IP}</strong></code></p>` : ""
+               let onlineBadge = isOnline ? `<div class="badge rounded-pill text-bg-light d-inline-flex align-items-center ms-auto"><div class="spinner-grow spinner-grow-xs text-sucess me-1" role="status"></div><span>Online</span></div>` : ""
+               let buttonText = !isOnline ? `<button type="button" class="btn btn-outline-${textTheme}">Starte Computer</button` : ""
+
+               let card = htmlToElement(`
+                    <div class="card ${cardClass} mb-3">
+                         <div class="card-header d-flex">${hostEntry.PC_NAME} ${onlineBadge}</div>
+                         <div class="card-body">
+                              <p class="card-text">MAC-Adresse: <code class="text-${textTheme}"><strong>${hostEntry.MAC}</strong></code></p>
+                              ${ipText}
+                              ${buttonText}
+                         </div>
+                    </div>
+                    `.trim()
+               )
+
+               if (buttonText.length) {
+                    let button = card.querySelector("button")
+                    button.setAttribute("data-pc-name", hostEntry.PC_NAME)
+     
+                    button.addEventListener("click", function(event) {
+                         socket.send(JSON.stringify(["WAKE", this.getAttribute("data-pc-name")]))
+                    })
+               }
+
+               return card
+          }
+
+          function htmlToElement(html) {
+               let template = document.createElement('template');
+               html = html.trim(); // Never return a text node of whitespace as the result
+               template.innerHTML = html;
+               return template.content.firstChild;
+          }
+
+     </script>
+</body>
+</html>
