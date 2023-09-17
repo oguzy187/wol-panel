@@ -1,0 +1,41 @@
+# Allgemeine Build- und Konfigurationsdateien
+node_modules
+npm-debug.log
+yarn-error.log
+.env
+.env.local
+.dockerignore
+.DS_Store
+*.log
+*.gz
+*.tgz
+
+# Git-bezogene Dateien und Ordner
+.git
+.gitignore
+
+# Testdateien und -ordner (falls Sie Tests haben)
+__tests__
+__mocks__
+
+# Entwicklungsumgebungsspezifische Dateien (z. B. Visual Studio Code)
+.vscode
+
+# Paket-Manager-Cache und temporäre Dateien
+.npm
+.yarn
+.pnpm
+
+# Lokale IDE- und Editor-Konfigurationsdateien
+.idea
+*.sublime-project
+*.sublime-workspace
+.vscode
+
+# Node.js Debugging-Dateien
+node_modules/@types/node/*.js
+
+# Projektdateien und Ordner, die nicht benötigt werden
+build/
+coverage/
+logs/

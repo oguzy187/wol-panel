@@ -1,6 +1,4 @@
 const express = require("express")
-const app = express()
-const server = require("http").createServer(app)
 const WebSocket = require("ws")
 const dotenv = require("dotenv")
 const ping = require("ping")
@@ -8,11 +6,21 @@ const wol = require("wake_on_lan")
 const path = require("path")
 dotenv.config()
 
+const port = parseInt(process.env.PORT)
+
+if (!(port >= 0 && port <=  65535)) {
+     console.error(`Invalid Port: "${process.env.PORT}"`)
+     process.exit(1)
+}
+
+
+
+const app = express()
+const server = require("http").createServer(app)
 
 let allHosts = []
 for (const [host, addresses] of Object.entries(process.env).filter(([env, val]) => /^HOST_PC_/.test(env))) {
      const PC_NAME = host.replace(/^HOST_PC_/, "")
-     let addressMap = {}
      const SPLITTED_ADDRESSES = addresses.split(",")
 
      let hostEntry = {
@@ -23,9 +31,12 @@ for (const [host, addresses] of Object.entries(process.env).filter(([env, val]) 
           hostEntry.IP = SPLITTED_ADDRESSES[1]
      }
 
-
+     console.log(`add host-entry: ${hostEntry.PC_NAME} MAC: ${hostEntry.MAC} IP: ${hostEntry.IP}`)
      allHosts.push(hostEntry)
 }
+
+app.use(express.static(path.join(__dirname, "node_modules", "bootstrap", "dist")))
+app.use(express.static(path.join(__dirname, "frontend")))
 
 const wss = new WebSocket.Server({
      server: server
@@ -56,15 +67,7 @@ wss.on("connection", function(ws) {
 
 
 
-app.use(express.static(path.join(__dirname, "node_modules", "bootstrap", "dist")))
-app.use(express.static(path.join(__dirname, "frontend")))
-
-
-// app.get("/", (req, res) => {
-//      res.send("Hello")
-// })
-
-server.listen(3000, () => console.log("Listening on port 3000"))
+server.listen(process.env.PORT, () => console.log(`Listening on port ${process.env.PORT}`))
 
 
 updatePingStates()
