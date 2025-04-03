@@ -7,6 +7,7 @@ const path = require("path")
 dotenv.config()
 
 const port = parseInt(process.env.PORT)
+const isStartingStateDuration = 10000
 
 if (!(port >= 0 && port <=  65535)) {
      console.error(`Invalid Port: "${process.env.PORT}"`)
@@ -42,6 +43,8 @@ const wss = new WebSocket.Server({
      server: server
 })
 
+const isStartingTimeouts = new Map()
+
 wss.on("connection", function(ws) {
      ws.on("message", function(message) {
           const MESSAGE_TOKENS = JSON.parse(String(message))
@@ -51,10 +54,24 @@ wss.on("connection", function(ws) {
                case "GETHOSTSTATES":
                     ws.send(JSON.stringify([COMMAND, allHosts]))
                     break;
-               case "WAKE":
+               case "WAKE": {}
                     let findHost = allHosts.find(host => host.PC_NAME === MESSAGE_TOKENS[0])
                     if (findHost !== undefined) {
-                         wol.wake(findHost.MAC)
+                         findHost.isStarting = true
+                         wol.wake(findHost.MAC, {
+                              num_packets: 6
+                         })
+
+                         if (isStartingTimeouts.has(findHost)) {
+                              clearTimeout(isStartingTimeouts[findHost])
+                         }
+
+                              
+                         isStartingTimeouts[findHost] = setTimeout(() => {
+                              findHost.isStarting = false
+                              wss.clients.forEach
+                         }, isStartingStateDuration)
+                         ws.send(JSON.stringify(["GETHOSTSTATES", allHosts]))
                     }
                     break;
           

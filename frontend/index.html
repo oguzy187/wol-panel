@@ -1,141 +1,287 @@
 <!DOCTYPE html>
 <html lang="de">
-<head>
-     <meta charset="UTF-8">
-     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <head>
+          <meta charset="UTF-8" />
+          <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+          <meta
+               name="viewport"
+               content="width=device-width, initial-scale=1.0"
+          />
 
-     <script src="/js/bootstrap.bundle.min.js"></script>
-     <link rel="stylesheet" href="/css/bootstrap.min.css" />
+          <script src="/js/bootstrap.bundle.min.js"></script>
+          <link rel="stylesheet" href="/css/bootstrap.min.css" />
 
-     <title>WOL Panel</title>
-</head>
-<body>
-     <style>
-          .spinner-grow-xs {
-               --bs-spinner-width: .75em;
-               --bs-spinner-height: .75em;
-          }
-     </style>
-     
-     <div class="container my-4">
-          <div class="row js-card-container">
+          <title>WOL Panel</title>
+     </head>
+     <body>
+          <style>
+               .spinner-xs {
+                    --bs-spinner-width: 0.75em;
+                    --bs-spinner-height: 0.75em;
+                    --bs-spinner-border-width: 0.175em;
+               }
+          </style>
 
+          <button id="themeToggle" class="btn btn-link position-absolute" style="top: 1rem; right: 1rem;">
+               <!-- Sonne (für Light) -->
+                <svg xmlns="http://www.w3.org/2000/svg" id="iconSun" width="24" height="24" fill="currentColor" class="bi bi-brightness-high" viewBox="0 0 16 16" style="display: block">
+                    <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/>
+               </svg>
+               
+               <!-- Mond (für Dark) -->
+                <svg xmlns="http://www.w3.org/2000/svg" id="iconMoon" width="24" height="24" fill="currentColor" class="bi bi-moon-fill" viewBox="0 0 16 16" style="display: none">
+                    <path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/>
+               </svg>
+          </button>
+
+          <div class="container my-4">
+               <div class="row js-card-container"></div>
           </div>
-     </div>
 
-     <script>
-          const socket = new WebSocket("ws://" + window.location.host)
-          socket.addEventListener("message", socketMessageHandler)
+          <script>
+               let socket;
+               let mainLoopInterval = null;
+               const reconnectInterval = 5000; // ms
 
-          let mainLoopInterval = null
-          socket.addEventListener("open", () => {
-               requestHostStates()
-               startMainLoop()
-          })
+               function connectWebSocket() {
+                    // Ersetze diese URL mit deinem tatsächlichen Endpunkt
+                    socket = new WebSocket("ws://" + window.location.host);
 
+                    // Bei erfolgreicher Verbindung
+                    socket.addEventListener("open", () => {
+                         console.log("[WebSocket] Verbunden");
+                         requestHostStates();
+                         startMainLoop();
+                    });
 
+                    // Bei empfangenen Nachrichten
+                    socket.addEventListener("message", socketMessageHandler);
 
-          window.addEventListener("blur", () => stopMainLoop())
-          window.addEventListener("focus", () => {
-               requestHostStates()
-               startMainLoop()
-          })
+                    // Bei Fehlern
+                    socket.addEventListener("error", (error) => {
+                         console.error("[WebSocket] Fehler:", error);
+                         // Wir schließen manuell, damit "close" sicher ausgelöst wird.
+                         stopMainLoop();
+                         socket.close();
+                    });
 
-          function socketMessageHandler(event) {
-               const RESPONSE = JSON.parse(String(event.data))
-               const COMMAND = RESPONSE.shift()
-
-
-               switch (COMMAND) {
-                    case "GETHOSTSTATES":
-                         renderHosts(RESPONSE[0])
-                         break;
-               
-                    default:
-                         break;
+                    // Wenn die Verbindung unerwartet schließt, erneut versuchen
+                    socket.addEventListener("close", (event) => {
+                         console.warn(
+                              "[WebSocket] Verbindung geschlossen:",
+                              event
+                         );
+                         stopMainLoop();
+                         // Reconnect nach kurzer Wartezeit
+                         setTimeout(() => {
+                              console.log("[WebSocket] Versuche Reconnect...");
+                              connectWebSocket();
+                         }, reconnectInterval);
+                    });
                }
 
-               
-          }
+               connectWebSocket();
 
-          function requestHostStates() {
-               if (socket.readyState !== socket.OPEN) {
-                    console.error("socket not open")
-                    return
+               window.addEventListener("blur", () => stopMainLoop());
+               window.addEventListener("focus", () => {
+                    requestHostStates();
+                    startMainLoop();
+               });
+
+               function socketMessageHandler(event) {
+                    const RESPONSE = JSON.parse(String(event.data));
+                    const COMMAND = RESPONSE.shift();
+
+                    switch (COMMAND) {
+                         case "GETHOSTSTATES":
+                              renderHosts(RESPONSE[0]);
+                              break;
+
+                         default:
+                              break;
+                    }
                }
 
-               socket.send(JSON.stringify(["GETHOSTSTATES"]))
-          }
-          
-          function startMainLoop() {
-               stopMainLoop()
-               mainLoopInterval = setInterval(requestHostStates, 7500)
-          }
+               function requestHostStates() {
+                    if (socket.readyState !== socket.OPEN) {
+                         return;
+                    }
+                    console.count("🎈 requestHostStates");
 
-          function stopMainLoop() {
-               if (mainLoopInterval !== null) clearInterval(mainLoopInterval)
-               mainLoopInterval = null
-          }
-     
-          function renderHosts(allHosts) {
-               let cardContainer = document.querySelector(".js-card-container")
-               cardContainer.innerHTML = ""
-               for (const hostEntry of allHosts) {
-                    let card = createComputerCard(hostEntry)
-                    let col = htmlToElement(`<div class="col-md-4 col-sm-6"></div>`)
-                    col.appendChild(card)
-                    cardContainer.appendChild(col)
-               }
-          }
-
-
-          function createComputerCard(hostEntry) {
-               let cardClass, textTheme, isOnline = false
-               if (hostEntry.hasOwnProperty("isAlive")) {
-                    cardClass = hostEntry.isAlive ? "text-bg-success" : "text-bg-danger"
-                    textTheme = "light"
-                    isOnline = hostEntry.isAlive
-               } else {
-                    cardClass = "text-bg-secondary"
-                    textTheme = "light"
+                    socket.send(JSON.stringify(["GETHOSTSTATES"]));
                }
 
-               let ipText = hostEntry.hasOwnProperty("IP") ? `<p class="card-text">IP-Adresse: <code class="text-${textTheme}"><strong>${hostEntry.IP}</strong></code></p>` : ""
-               let onlineBadge = isOnline ? `<div class="badge rounded-pill text-bg-light d-inline-flex align-items-center ms-auto"><div class="spinner-grow spinner-grow-xs text-sucess me-1" role="status"></div><span>Online</span></div>` : ""
-               let buttonText = !isOnline ? `<button type="button" class="btn btn-outline-${textTheme}">Starte Computer</button` : ""
+               function startMainLoop() {
+                    stopMainLoop();
+                    mainLoopInterval = setInterval(requestHostStates, 7500);
+               }
 
-               let card = htmlToElement(`
+               function stopMainLoop() {
+                    if (mainLoopInterval !== null)
+                         clearInterval(mainLoopInterval);
+                    mainLoopInterval = null;
+               }
+
+               function renderHosts(allHosts) {
+                    let cardContainer =
+                         document.querySelector(".js-card-container");
+                    cardContainer.innerHTML = "";
+                    for (const hostEntry of allHosts) {
+                         let card = createComputerCard(hostEntry);
+                         let col = htmlToElement(
+                              `<div class="col-md-4 col-sm-6"></div>`
+                         );
+                         col.appendChild(card);
+                         cardContainer.appendChild(col);
+                    }
+               }
+
+               function createComputerCard(hostEntry) {
+                    let cardClass,
+                         textTheme,
+                         isOnline = false,
+                         isStarting = false;
+
+                    if (hostEntry.hasOwnProperty("isAlive")) {
+                         if (hostEntry.isAlive) {
+                              cardClass = "text-bg-success";
+                              textTheme = "light";
+                         } else if (hostEntry.isStarting) {
+                              cardClass = "text-bg-warning";
+                              textTheme = "dark";
+                         } else {
+                              cardClass = "text-bg-danger";
+                              textTheme = "light";
+                         }
+                         isOnline = hostEntry.isAlive;
+                         isStarting = hostEntry.isStarting;
+                    } else {
+                         cardClass = "text-bg-secondary";
+                         textTheme = "light";
+                    }
+
+                    let ipText = hostEntry.hasOwnProperty("IP")
+                         ? `<p class="card-text">IP-Adresse: <code class="text-${textTheme}"><strong>${hostEntry.IP}</strong></code></p>`
+                         : "";
+
+                    let badge = "";
+                    if (isOnline) {
+                         badge = `<div class="badge rounded-pill text-bg-light d-inline-flex align-items-center ms-auto"><div class="spinner-grow spinner-xs me-1" role="status"></div><span>Online</span></div>`;
+                    } else if (isStarting) {
+                         badge = `<div class="badge rounded-pill text-bg-light d-inline-flex align-items-center ms-auto"><div class="spinner-border spinner-xs me-1" role="status"></div><span>Startet</span></div>`;
+                    }
+
+                    let btn = "";
+                    if (isStarting) {
+                         btn = `<button type="button" class="btn btn-outline-${textTheme} disabled">Startet...</button`;
+                    } else if (!isOnline) {
+                         btn = `<button type="button" class="btn btn-outline-${textTheme}">Starte Computer</button`;
+                    }
+
+                    let card = htmlToElement(
+                         `
                     <div class="card ${cardClass} mb-3">
-                         <div class="card-header d-flex">${hostEntry.PC_NAME} ${onlineBadge}</div>
+                         <div class="card-header d-flex">${hostEntry.PC_NAME} ${badge}</div>
                          <div class="card-body">
                               <p class="card-text">MAC-Adresse: <code class="text-${textTheme}"><strong>${hostEntry.MAC}</strong></code></p>
                               ${ipText}
-                              ${buttonText}
+                              ${btn}
                          </div>
                     </div>
                     `.trim()
-               )
+                    );
 
-               if (buttonText.length) {
-                    let button = card.querySelector("button")
-                    button.setAttribute("data-pc-name", hostEntry.PC_NAME)
-     
-                    button.addEventListener("click", function(event) {
-                         socket.send(JSON.stringify(["WAKE", this.getAttribute("data-pc-name")]))
-                    })
+                    if (btn.length) {
+                         let button = card.querySelector("button");
+                         button.setAttribute("data-pc-name", hostEntry.PC_NAME);
+
+                         button.addEventListener("click", function (event) {
+                              socket.send(
+                                   JSON.stringify([
+                                        "WAKE",
+                                        this.getAttribute("data-pc-name"),
+                                   ])
+                              );
+                         });
+                    }
+
+                    return card;
                }
 
-               return card
-          }
+               function htmlToElement(html) {
+                    let template = document.createElement("template");
+                    html = html.trim(); // Never return a text node of whitespace as the result
+                    template.innerHTML = html;
+                    return template.content.firstChild;
+               }
 
-          function htmlToElement(html) {
-               let template = document.createElement('template');
-               html = html.trim(); // Never return a text node of whitespace as the result
-               template.innerHTML = html;
-               return template.content.firstChild;
-          }
+               // Lightswitch
+               /**
+                * Cookie setzen
+                * @param {string} name - Name des Cookies
+                * @param {string} value - Wert des Cookies
+                * @param {number} days - Gültigkeitsdauer in Tagen
+                */
+               function setCookie(name, value, days) {
+                    const d = new Date();
+                    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+                    const expires = "expires=" + d.toUTCString();
+                    document.cookie = `${name}=${value};${expires};path=/`;
+               }
 
-     </script>
-</body>
+               /**
+                * Cookie auslesen
+                * @param {string} name - Name des Cookies
+                * @return {string} - Wert des Cookies, falls vorhanden
+                */
+               function getCookie(name) {
+                    const decodedCookie = decodeURIComponent(document.cookie);
+                    const cookieArray = decodedCookie.split(";");
+                    for (let c of cookieArray) {
+                         c = c.trim();
+                         if (c.indexOf(name + "=") === 0) {
+                              return c.substring(name.length + 1);
+                         }
+                    }
+                    return "";
+               }
+
+               // DOM-Referenzen
+               const htmlEl = document.documentElement;
+               const buttonToggle = document.getElementById("themeToggle");
+               const iconSun = document.getElementById("iconSun");
+               const iconMoon = document.getElementById("iconMoon");
+
+               // Beim Laden prüfen, ob im Cookie ein Theme gespeichert ist
+               const savedTheme = getCookie("preferredTheme");
+               if (savedTheme) {
+                    htmlEl.setAttribute("data-bs-theme", savedTheme);
+                    toggleIcons(savedTheme);
+               }
+
+               // Button-Klick -> Theme toggeln
+               buttonToggle.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    const isDark =
+                         htmlEl.getAttribute("data-bs-theme") === "dark";
+                    const newTheme = isDark ? "light" : "dark";
+
+                    htmlEl.setAttribute("data-bs-theme", newTheme);
+                    setCookie("preferredTheme", newTheme, 365); // 1 Jahr
+
+                    toggleIcons(newTheme);
+               });
+
+               // Icons je nach Theme ein-/ausblenden
+               function toggleIcons(theme) {
+                    if (theme === "dark") {
+                         iconSun.style.display = "none";
+                         iconMoon.style.display = "inline";
+                    } else {
+                         iconSun.style.display = "inline";
+                         iconMoon.style.display = "none";
+                    }
+               }
+          </script>
+     </body>
 </html>
