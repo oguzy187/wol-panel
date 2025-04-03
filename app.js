@@ -7,7 +7,7 @@ const path = require("path")
 dotenv.config()
 
 const port = parseInt(process.env.PORT)
-const isStartingStateDuration = 10000
+const isStartingStateDuration = 35000
 
 if (!(port >= 0 && port <=  65535)) {
      console.error(`Invalid Port: "${process.env.PORT}"`)
